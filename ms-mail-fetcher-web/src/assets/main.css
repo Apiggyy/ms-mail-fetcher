@@ -1,0 +1,62 @@
+body {
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: var(--el-bg-color-page);
+  color: #334155;
+}
+
+/* Premium Card Style */
+.premium-card {
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.05),
+    0 4px 6px -2px rgba(0, 0, 0, 0.025) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(10px);
+}
+
+.premium-card .el-card__header {
+  border-bottom: 1px solid rgba(241, 245, 249, 0.8) !important;
+  background: transparent !important;
+}
+
+/* Table Enhancements */
+.el-table {
+  --el-table-border-color: #f1f5f9;
+  --el-table-header-bg-color: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 600 !important;
+  color: #475569 !important;
+}
+
+.el-table .el-table__row {
+  transition: all 0.2s ease;
+}
+
+.el-table .el-table__row:hover > td {
+  background-color: #f1f5f9 !important;
+}
+
+/* Page Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}

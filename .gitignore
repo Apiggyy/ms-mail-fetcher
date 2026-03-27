@@ -1,0 +1,11 @@
+.vscode/
+.idea/
+
+**/__pycache__/
+
+ms-mail-fetcher-server/build/
+ms-mail-fetcher-server/dist/
+
+
+ms-mail-fetcher-web/dist
+ms-mail-fetcher-web/node_modules
