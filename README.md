@@ -1,6 +1,6 @@
 # MS Mail Fetcher
 
-一个基于 **FastAPI + Vue 3 + pywebview** 的邮件账号管理与邮件查看工具，支持：
+一个基于 **FastAPI + Vue 3 + pywebview** 的Outlook邮件账号管理与邮件查看工具，支持：
 
 - Web 前后端分离开发
 - 桌面版（Windows）一键打包分发
