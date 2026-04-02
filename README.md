@@ -103,9 +103,69 @@ npm run dev
 
 ---
 
-## 5. 桌面版运行与打包（Windows）
+## 5. Docker 整体部署
 
-### 5.1 本地运行桌面版（开发验证）
+适用场景：
+- Linux 服务器
+- NAS / Docker 主机
+- 需要用单个容器同时提供前端页面和 FastAPI API
+
+### 5.1 使用 Docker Compose 启动
+
+在仓库根目录：
+
+```bash
+docker compose up -d --build
+```
+
+默认访问地址：
+
+- `http://localhost:18765`
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+### 5.2 数据持久化
+
+Compose 默认挂载命名卷：
+
+- `ms-mail-fetcher-data:/data`
+
+容器内数据目录：
+
+- `/data/ms_mail_fetcher.db`
+- `/data/ui_preferences.json`
+
+### 5.3 可选环境变量
+
+- `APP_PORT`：宿主机映射端口，默认 `18765`
+- `DATA_DIR`：容器内数据目录，默认 `/data`
+- `DATABASE_URL`：自定义数据库连接串；未配置时默认使用 SQLite 文件
+- `HOST`：服务监听地址，默认 `0.0.0.0`
+- `PORT`：容器内监听端口，默认 `18765`
+- `AUTO_PORT_FALLBACK`：是否自动切换到其他端口，容器部署建议为 `false`
+
+### 5.4 直接构建镜像
+
+```bash
+docker build -t ms-mail-fetcher .
+docker run -d \
+  --name ms-mail-fetcher \
+  -p 18765:18765 \
+  -e DATA_DIR=/data \
+  -e AUTO_PORT_FALLBACK=false \
+  -v ms-mail-fetcher-data:/data \
+  ms-mail-fetcher
+```
+
+---
+
+## 6. 桌面版运行与打包（Windows）
+
+### 6.1 本地运行桌面版（开发验证）
 
 在 `ms-mail-fetcher-server` 目录：
 
@@ -117,7 +177,7 @@ python desktop_main.py
 - 启动内置 FastAPI 服务（`127.0.0.1` 可用端口）
 - 打开 pywebview 窗口
 
-### 5.2 一键构建桌面包（推荐）
+### 6.2 一键构建桌面包（推荐）
 
 在仓库根目录：
 
@@ -136,7 +196,7 @@ build_desktop.bat
 
 ---
 
-## 6. 运行配置
+## 7. 运行配置
 
 配置文件：`ms-mail-fetcher-server/server.config.json`
 
@@ -158,15 +218,18 @@ build_desktop.bat
 - `reload`：开发热重载（仅开发时）
 - `auto_port_fallback`：端口被占用时自动递增尝试
 - `port_retry_count`：尝试端口数量
+- 同名环境变量 `HOST`、`PORT`、`RELOAD`、`AUTO_PORT_FALLBACK`、`PORT_RETRY_COUNT` 会优先覆盖配置文件
 
 ---
 
-## 7. 数据库与数据存储
+## 8. 数据库与数据存储
 
 应用使用 SQLite，数据库文件默认位于：
 
 - Windows: `%LOCALAPPDATA%/ms-mail-fetcher/ms_mail_fetcher.db`
 - 无 `LOCALAPPDATA` 时：`~/.ms-mail-fetcher/ms_mail_fetcher.db`
+- 若设置 `DATA_DIR`，则数据库与 UI 偏好文件都会写入该目录
+- 若设置 `DATABASE_URL`，后端将优先使用该连接串
 
 主要数据表：
 - `accounts`
@@ -176,7 +239,7 @@ build_desktop.bat
 
 ---
 
-## 8. 主要 API 路由（后端）
+## 9. 主要 API 路由（后端）
 
 - 健康检查：`GET /api/health`
 - 账号管理：`/api/accounts`
@@ -189,7 +252,7 @@ build_desktop.bat
 
 ---
 
-## 9. Git 忽略建议
+## 10. Git 忽略建议
 
 仓库根目录维护 `.gitignore`，建议忽略：
 
@@ -204,7 +267,7 @@ build_desktop.bat
 
 ---
 
-## 10. 常见问题
+## 11. 常见问题
 
 ### Q1：前端页面空白/404
 请先执行前端构建，并确认 `ms-mail-fetcher-server/template/index.html` 存在。
@@ -220,7 +283,7 @@ build_desktop.bat
 
 ---
 
-## 11. 维护建议
+## 12. 维护建议
 
 - 每次发布前执行一次完整桌面构建验证
 - 定期备份 SQLite 文件
@@ -228,11 +291,11 @@ build_desktop.bat
 
 ---
 
-## 12. License
+## 13. License
 
 如需开源发布，请在仓库根目录补充 `LICENSE` 文件并在此处声明许可证类型。
 
 
-## 13. Link
+## 14. Link
 
 [Linux do](https://linux.do/) - 学AI，上L站！真诚、友善、团结、专业，共建你我引以为荣之社区。

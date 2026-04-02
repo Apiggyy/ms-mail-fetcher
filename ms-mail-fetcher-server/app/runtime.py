@@ -108,10 +108,16 @@ def resolve_server_bind() -> tuple[str, int, bool, Path]:
     reload_enabled = _parse_bool(os.getenv("RELOAD"), _parse_bool(config.get("reload"), DEFAULT_RELOAD))
 
     auto_port_fallback = _parse_bool(
-        config.get("auto_port_fallback"),
-        DEFAULT_AUTO_PORT_FALLBACK,
+        os.getenv("AUTO_PORT_FALLBACK"),
+        _parse_bool(config.get("auto_port_fallback"), DEFAULT_AUTO_PORT_FALLBACK),
     )
-    retry_count = max(0, _parse_int(config.get("port_retry_count"), DEFAULT_PORT_RETRY_COUNT))
+    retry_count = max(
+        0,
+        _parse_int(
+            os.getenv("PORT_RETRY_COUNT"),
+            _parse_int(config.get("port_retry_count"), DEFAULT_PORT_RETRY_COUNT),
+        ),
+    )
 
     if auto_port_fallback:
         for candidate in range(preferred_port, preferred_port + retry_count + 1):

@@ -1,0 +1,14 @@
+.git
+.DS_Store
+.idea
+.vscode
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.db
+**/node_modules
+**/dist
+ms-mail-fetcher-server/build
+screenshots

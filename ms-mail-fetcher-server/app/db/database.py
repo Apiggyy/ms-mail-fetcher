@@ -1,27 +1,17 @@
 import os
-from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from app.paths import resolve_data_file
 
-def _resolve_db_file() -> Path:
-    appdata = os.getenv("LOCALAPPDATA")
-    if appdata:
-        base_dir = Path(appdata) / "ms-mail-fetcher"
-    else:
-        base_dir = Path.home() / ".ms-mail-fetcher"
+DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{resolve_data_file('ms_mail_fetcher.db').as_posix()}"
 
-    base_dir.mkdir(parents=True, exist_ok=True)
-    return base_dir / "ms_mail_fetcher.db"
+engine_kwargs = {}
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
 
-
-DATABASE_URL = f"sqlite:///{_resolve_db_file().as_posix()}"
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

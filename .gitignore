@@ -1,7 +1,10 @@
 .vscode/
 .idea/
+.env
+.env.*
 
 **/__pycache__/
+*.db
 
 ms-mail-fetcher-server/build/
 ms-mail-fetcher-server/dist/

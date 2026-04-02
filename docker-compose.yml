@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PORT:-18765}:18765"
+    environment:
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: 18765
+      AUTO_PORT_FALLBACK: "false"
+    volumes:
+      - ms-mail-fetcher-data:/data
+    restart: unless-stopped
+
+volumes:
+  ms-mail-fetcher-data:

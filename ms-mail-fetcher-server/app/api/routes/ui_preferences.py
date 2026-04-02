@@ -1,23 +1,15 @@
 import json
-import os
-from pathlib import Path
 
 from fastapi import APIRouter
 
+from app.paths import resolve_data_file
 from app.schemas.schemas import UiPreferences, UiPreferencesUpdate
 
 router = APIRouter(prefix="/api/ui", tags=["ui-preferences"])
 
 
-def _resolve_preferences_file() -> Path:
-    appdata = os.getenv("LOCALAPPDATA")
-    if appdata:
-        base_dir = Path(appdata) / "ms-mail-fetcher"
-    else:
-        base_dir = Path.home() / ".ms-mail-fetcher"
-
-    base_dir.mkdir(parents=True, exist_ok=True)
-    return base_dir / "ui_preferences.json"
+def _resolve_preferences_file():
+    return resolve_data_file("ui_preferences.json")
 
 
 def _read_preferences() -> UiPreferences:
