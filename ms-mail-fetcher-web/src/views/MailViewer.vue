@@ -165,7 +165,14 @@ onMounted(fetchMails)
                     <div><b>时间：</b>{{ currentDetail.date || '-' }}</div>
                 </div>
                 <el-divider />
-                <div class="mail-body" v-if="renderedBodyHtml" v-html="renderedBodyHtml"></div>
+                <iframe
+                    v-if="renderedBodyHtml"
+                    class="mail-body-frame"
+                    :srcdoc="renderedBodyHtml"
+                    sandbox="allow-popups allow-popups-to-escape-sandbox"
+                    referrerpolicy="no-referrer"
+                    title="邮件 HTML 正文"
+                ></iframe>
                 <pre v-else class="mail-text">{{ currentDetail.body_text || '(无正文)' }}</pre>
             </template>
             <el-empty v-else description="暂无详情" />
@@ -205,9 +212,13 @@ onMounted(fetchMails)
     color: #606266;
 }
 
-.mail-body {
+.mail-body-frame {
+    width: 100%;
     max-height: 60vh;
-    overflow: auto;
+    min-height: 60vh;
+    border: none;
+    border-radius: 8px;
+    background: #fff;
 }
 
 .mail-text {
