@@ -41,7 +41,7 @@ const renderedBodyHtml = computed(() => {
     return ''
 })
 
-async function fetchMails() {
+async function fetchMails(forceRefresh = false) {
     if (!accountId.value) return
 
     loading.value = true
@@ -49,6 +49,7 @@ async function fetchMails() {
         const data = await getMailList(accountId.value, folder.value, {
             page: page.value,
             page_size: pageSize.value,
+            force_refresh: forceRefresh || undefined,
         })
         rows.value = data.items || []
         total.value = data.total || 0
@@ -104,7 +105,7 @@ function goBack() {
 }
 
 async function onRefreshMails() {
-    await fetchMails()
+    await fetchMails(true)
 }
 
 watch(

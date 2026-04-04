@@ -13,6 +13,8 @@ class Account(Base):
     password = Column(String, nullable=False)
     client_id = Column(String, nullable=False)
     refresh_token = Column(String, nullable=False)
+    access_token = Column(String, nullable=True)
+    access_token_expires_at = Column(DateTime, nullable=True)
     last_refresh_time = Column(DateTime, nullable=False, default=datetime.utcnow)
     account_type = Column(String, nullable=True)
     remark = Column(String, nullable=True)

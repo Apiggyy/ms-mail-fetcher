@@ -20,6 +20,7 @@ from app.api.routes.mail import router as mail_router
 from app.api.routes.ui_preferences import router as ui_preferences_router
 from app.crud.account_types import ensure_default_account_types
 from app.db.database import Base, SessionLocal, engine
+from app.db.migrations import ensure_sqlite_schema_compatibility
 
 
 logger = logging.getLogger("ms_mail_fetcher")
@@ -160,6 +161,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app_: FastAPI):
         Base.metadata.create_all(bind=engine)
+        ensure_sqlite_schema_compatibility()
         db = SessionLocal()
         try:
             ensure_default_account_types(db)

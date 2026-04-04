@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.crud.account_types import ensure_account_type_exists, normalize_code
 from app.models.models import Account
+from app.services.tokens import refresh_account_token_now
 from app.schemas.schemas import AccountCreate, AccountOut, AccountUpdate, ImportResult, PaginatedAccounts
-from app.utils.outlook_imap_client import refresh_oauth_token_manually
 
 
 def to_account_out(account: Account) -> AccountOut:
@@ -229,24 +229,13 @@ def refresh_all_account_tokens(
     errors: list[str] = []
 
     for account in accounts:
-        refresh_result = refresh_oauth_token_manually(account.client_id, account.refresh_token)
+        refresh_result = refresh_account_token_now(db, account)
         if not refresh_result.get("success"):
             failed_count += 1
             errors.append(f"{account.email}: {refresh_result.get('error_msg', '刷新失败')}")
             continue
 
-        new_refresh_token = refresh_result.get("new_refresh_token")
-        if not new_refresh_token:
-            failed_count += 1
-            errors.append(f"{account.email}: 刷新成功但未返回 refresh_token")
-            continue
-
-        account.refresh_token = new_refresh_token
-        account.last_refresh_time = datetime.utcnow()
-        db.add(account)
         success_count += 1
-
-    db.commit()
 
     return {
         "total": len(accounts),

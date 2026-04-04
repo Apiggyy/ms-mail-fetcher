@@ -21,6 +21,8 @@
 | `password` | VARCHAR | NOT NULL | - | 邮箱密码（核心） |
 | `client_id` | VARCHAR | NOT NULL | - | Microsoft Client ID |
 | `refresh_token` | VARCHAR | NOT NULL | - | Microsoft Refresh Token |
+| `access_token` | VARCHAR | NULL | NULL | 缓存中的短期 Access Token |
+| `access_token_expires_at` | DATETIME | NULL | NULL | Access Token 过期时间（UTC） |
 | `last_refresh_time` | DATETIME | NOT NULL | `datetime.utcnow()` | 最后刷新时间 |
 | `account_type` | VARCHAR | NULL | NULL | 账号类型编码（关联 `account_types.code`） |
 | `remark` | VARCHAR | NULL | NULL | 备注 |
@@ -53,6 +55,8 @@ class Account(Base):
     password = Column(String, nullable=False)
     client_id = Column(String, nullable=False)
     refresh_token = Column(String, nullable=False)
+    access_token = Column(String, nullable=True)
+    access_token_expires_at = Column(DateTime, nullable=True)
     last_refresh_time = Column(DateTime, nullable=False, default=datetime.utcnow)
     account_type = Column(String, nullable=True)
     remark = Column(String, nullable=True)
@@ -79,6 +83,8 @@ CREATE TABLE accounts (
     password VARCHAR NOT NULL,
     client_id VARCHAR NOT NULL,
     refresh_token VARCHAR NOT NULL,
+    access_token VARCHAR NULL,
+    access_token_expires_at DATETIME NULL,
     last_refresh_time DATETIME NOT NULL,
     account_type VARCHAR NULL,
     remark VARCHAR NULL,
@@ -126,7 +132,15 @@ days_since_refresh = max((datetime.utcnow() - account.last_refresh_time).days, 0
 
 ---
 
-## 8. 初始化与验证
+## 8. Token 缓存说明
+
+- `refresh_token` 仍是长期凭证来源
+- `access_token` 为短期缓存，优先复用，临近过期时自动刷新
+- 启动时会检查旧库表结构，缺少 `access_token/access_token_expires_at` 时自动补列
+
+---
+
+## 9. 初始化与验证
 
 ### 启动后端（自动建库建表）
 
@@ -149,7 +163,7 @@ PRAGMA table_info(account_types);
 
 ---
 
-## 9. 备份建议
+## 10. 备份建议
 
 SQLite 备份可直接复制数据库文件：
 

@@ -14,9 +14,17 @@ def list_mails_route(
     folder: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
+    force_refresh: bool = Query(False),
     db: Session = Depends(get_db),
 ):
-    return list_mails(db=db, account_id=account_id, folder=folder, page=page, page_size=page_size)
+    return list_mails(
+        db=db,
+        account_id=account_id,
+        folder=folder,
+        page=page,
+        page_size=page_size,
+        force_refresh=force_refresh,
+    )
 
 
 @router.get("/{account_id}/mail/{folder}/{message_id}", response_model=MailDetailResponse)
