@@ -21,6 +21,7 @@ from app.api.routes.ui_preferences import router as ui_preferences_router
 from app.crud.account_types import ensure_default_account_types
 from app.db.database import Base, SessionLocal, engine
 from app.db.migrations import ensure_sqlite_schema_compatibility
+from app.services.imap_session import close_all_sessions
 
 
 logger = logging.getLogger("ms_mail_fetcher")
@@ -172,6 +173,7 @@ def create_app() -> FastAPI:
         port = str(getattr(app_.state, "server_port", "")) or str(os.getenv("PORT") or DEFAULT_PORT)
         logger.info(f"Server started: http://{host}:{port}")
         yield
+        close_all_sessions()
         logger.info("Server stopped")
 
     app = FastAPI(title="MS-Mail GPT Manager API", version="2.0.0", lifespan=lifespan)

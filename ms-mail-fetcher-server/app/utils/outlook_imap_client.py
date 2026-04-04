@@ -191,8 +191,23 @@ def _fetch_mail_headers_batch(imap_conn, page_uids: list[bytes], target_folder: 
     return ordered_headers
 
 
-def get_emails_by_folder_paginated(email_address, access_token, target_folder=INBOX_FOLDER_NAME,
-                                   page_number=0, emails_per_page=10):
+def ensure_folder_selected(imap_conn, session_entry, target_folder: str) -> tuple[bool, float, str]:
+    if session_entry.selected_folder == target_folder:
+        return True, 0.0, ""
+
+    started_at = time.perf_counter()
+    typ, _ = imap_conn.select(target_folder, readonly=True)
+    duration_ms = (time.perf_counter() - started_at) * 1000
+    if typ != "OK":
+        session_entry.selected_folder = None
+        return False, duration_ms, f"选择文件夹 '{target_folder}' 失败"
+
+    session_entry.selected_folder = target_folder
+    return True, duration_ms, ""
+
+
+def get_emails_by_folder_paginated(imap_conn, session_entry, email_address, target_folder=INBOX_FOLDER_NAME,
+                                   page_number=0, emails_per_page=10, imap_auth_ms: float = 0.0):
     """
     分页获取 Outlook 指定文件夹的邮件列表。
     只返回干净的邮件数据，不包含任何 token 刷新的杂质。
@@ -203,28 +218,16 @@ def get_emails_by_folder_paginated(email_address, access_token, target_folder=IN
         "total_emails": 0,
         "emails": [],
         "auth_failed": False,
+        "session_broken": False,
         "timings": _new_timing_dict(),
     }
-
-    imap_conn = None
+    result["timings"]["imap_auth_ms"] = imap_auth_ms
     started_at = time.perf_counter()
     try:
-        auth_started = time.perf_counter()
-        imap_conn = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-        auth_string = f"user={email_address}\1auth=Bearer {access_token}\1\1"
-        typ, _ = imap_conn.authenticate('XOAUTH2', lambda x: auth_string.encode('utf-8'))
-        result["timings"]["imap_auth_ms"] = (time.perf_counter() - auth_started) * 1000
-
-        if typ != 'OK':
-            result["error_msg"] = "IMAP 认证失败，请确认凭证有效"
-            result["auth_failed"] = True
-            return _finalize_timing(result, started_at)
-
-        select_started = time.perf_counter()
-        typ, _ = imap_conn.select(target_folder, readonly=True)
-        result["timings"]["select_ms"] = (time.perf_counter() - select_started) * 1000
-        if typ != 'OK':
-            result["error_msg"] = f"选择文件夹 '{target_folder}' 失败"
+        selected, select_ms, select_error = ensure_folder_selected(imap_conn, session_entry, target_folder)
+        result["timings"]["select_ms"] = select_ms
+        if not selected:
+            result["error_msg"] = select_error
             return _finalize_timing(result, started_at)
 
         search_started = time.perf_counter()
@@ -250,19 +253,24 @@ def get_emails_by_folder_paginated(email_address, access_token, target_folder=IN
         result["success"] = True
         return _finalize_timing(result, started_at)
 
+    except imaplib.IMAP4.error as e:
+        result["error_msg"] = f"IMAP 认证失败，请确认凭证有效: {e}"
+        result["auth_failed"] = True
+        return _finalize_timing(result, started_at)
+    except imaplib.IMAP4.abort as e:
+        result["error_msg"] = f"IMAP 连接已断开: {e}"
+        result["session_broken"] = True
+        session_entry.selected_folder = None
+        return _finalize_timing(result, started_at)
     except Exception as e:
         result["error_msg"] = f"发生异常: {e}"
+        session_entry.selected_folder = None
+        result["session_broken"] = True
         return _finalize_timing(result, started_at)
-    finally:
-        if imap_conn:
-            try:
-                imap_conn.close()
-                imap_conn.logout()
-            except:
-                pass
 
 
-def get_email_detail_by_uid(email_address, access_token, target_uid, target_folder=INBOX_FOLDER_NAME):
+def get_email_detail_by_uid(imap_conn, session_entry, email_address, target_uid, target_folder=INBOX_FOLDER_NAME,
+                            imap_auth_ms: float = 0.0):
     """
     根据 UID 获取特定邮件的完整内容。
     只返回纯净的详情字典，不含 token 更新逻辑。
@@ -271,6 +279,7 @@ def get_email_detail_by_uid(email_address, access_token, target_uid, target_fold
         "success": False,
         "error_msg": "",
         "auth_failed": False,
+        "session_broken": False,
         "timings": _new_timing_dict(),
         "detail": {
             "subject": "",
@@ -281,26 +290,13 @@ def get_email_detail_by_uid(email_address, access_token, target_uid, target_fold
             "body_html": ""
         }
     }
-
-    imap_conn = None
+    result["timings"]["imap_auth_ms"] = imap_auth_ms
     started_at = time.perf_counter()
     try:
-        auth_started = time.perf_counter()
-        imap_conn = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-        auth_string = f"user={email_address}\1auth=Bearer {access_token}\1\1"
-        typ, _ = imap_conn.authenticate('XOAUTH2', lambda x: auth_string.encode('utf-8'))
-        result["timings"]["imap_auth_ms"] = (time.perf_counter() - auth_started) * 1000
-
-        if typ != 'OK':
-            result["error_msg"] = "IMAP 认证失败"
-            result["auth_failed"] = True
-            return _finalize_timing(result, started_at)
-
-        select_started = time.perf_counter()
-        typ, _ = imap_conn.select(target_folder, readonly=True)
-        result["timings"]["select_ms"] = (time.perf_counter() - select_started) * 1000
-        if typ != 'OK':
-            result["error_msg"] = f"选择文件夹 '{target_folder}' 失败"
+        selected, select_ms, select_error = ensure_folder_selected(imap_conn, session_entry, target_folder)
+        result["timings"]["select_ms"] = select_ms
+        if not selected:
+            result["error_msg"] = select_error
             return _finalize_timing(result, started_at)
 
         uid_bytes = target_uid.encode('utf-8') if isinstance(target_uid, str) else target_uid
@@ -380,41 +376,17 @@ def get_email_detail_by_uid(email_address, access_token, target_uid, target_fold
         result["success"] = True
         return _finalize_timing(result, started_at)
 
+    except imaplib.IMAP4.error as e:
+        result["error_msg"] = f"IMAP 认证失败: {e}"
+        result["auth_failed"] = True
+        return _finalize_timing(result, started_at)
+    except imaplib.IMAP4.abort as e:
+        result["error_msg"] = f"IMAP 连接已断开: {e}"
+        result["session_broken"] = True
+        session_entry.selected_folder = None
+        return _finalize_timing(result, started_at)
     except Exception as e:
         result["error_msg"] = f"解析异常: {e}"
+        session_entry.selected_folder = None
+        result["session_broken"] = True
         return _finalize_timing(result, started_at)
-    finally:
-        if imap_conn:
-            try:
-                imap_conn.close()
-                imap_conn.logout()
-            except:
-                pass
-
-
-# --- 用法示例 ---
-if __name__ == "__main__":
-    TEST_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753'
-    TEST_EMAIL = 'AdrianJones7591@outlook.com'
-    TEST_REFRESH_TOKEN = 'M.C536_SN1.0.U.-CsWcHph3Kdy2aP9mEIHeES4HDzQj7Fi1WYFq!PZQ6dR!nKznaRGG2!V6SuZFfyIddv9U7ohjp9X4iUu2G978J84tQXM4KFduPV!lGvVClMUehH44yVN*hrIEZl5PqEnKaMWvkvVXZXk8dgCEeSJXLgfgnMGRBmtLg9OvEewOTKFE6l8mI38SSvaIbLD!Z7fnMVzecZJHVFeO1qUekXwUEB7iHdRNPtmI3*CoRQ46OtYhWNDD9j*4*w7Gnpjwvao*55q!ekBGAK7CjdaouLWvXGBvl3MAEhy8gX687P1KSqNRAtnMbPVY0cHSeUFMDhlCGSZ!U!MqG6WuKjpVo4RlUvBCzA29MfS!eFEPUWcrYlPbGtVTDGefRZUrV9lGMhesX8AJeSmb4hFPTN7RvpjcjfmwgOcuPycbJwfFWDLOQrZBaZ7g26h8ruVOmHORDlbDWA$$'
-
-    # 场景 1：日常读取邮件，不再烦恼 token 更新的返回值，干净清爽！
-    print(">>> 测试：静默获取邮件列表")
-    token_res = refresh_oauth_token_manually(TEST_CLIENT_ID, TEST_REFRESH_TOKEN)
-    test_access_token = token_res.get("new_access_token", "")
-    list_res = get_emails_by_folder_paginated(
-        TEST_EMAIL, test_access_token,
-        target_folder=INBOX_FOLDER_NAME, page_number=0, emails_per_page=3
-    )
-    if list_res["success"]:
-        print(f"成功获取 {len(list_res['emails'])} 封邮件。返回字典里再也没有 token 相关的杂乱字段了！")
-    else:
-        print(f"获取失败: {list_res['error_msg']}")
-
-    # 场景 2：假设过了一个月，你想手动刷新并持久化 token 了
-    print("\n>>> 测试：手动调用专职刷新工具")
-    if token_res["success"]:
-        print(f"刷新成功！新的 Refresh Token: {token_res['new_refresh_token'][:20]}...")
-        # TODO: 这里写你保存到本地 txt 或数据库的代码
-    else:
-        print(f"刷新失败: {token_res['error_msg']}")

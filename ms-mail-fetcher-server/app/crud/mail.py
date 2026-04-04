@@ -12,6 +12,7 @@ from app.services.mail_cache import (
     set_detail_cache,
     set_list_cache,
 )
+from app.services.imap_session import acquire_imap_session, release_broken_session
 from app.services.tokens import get_access_token_for_account
 from app.schemas.schemas import MailDetailResponse, MailListResponse
 from app.utils.outlook_imap_client import (
@@ -41,7 +42,8 @@ def get_account_or_404(db: Session, account_id: int) -> Account:
 
 
 def _log_mail_operation(operation: str, account: Account, folder: str, token_result: dict, mail_result: dict, total_ms: float,
-                        *, page: int | None = None, page_size: int | None = None, retry: bool = False) -> None:
+                        *, page: int | None = None, page_size: int | None = None, retry: bool = False,
+                        session_source: str = "unknown") -> None:
     timings = mail_result.get("timings", {})
     message_parts = [
         f"mail.{operation}",
@@ -49,6 +51,7 @@ def _log_mail_operation(operation: str, account: Account, folder: str, token_res
         f"folder={folder}",
         f"retry={retry}",
         f"token_source={token_result.get('token_source', 'unknown')}",
+        f"session_source={session_source}",
         f"token_ms={token_result.get('duration_ms', 0.0):.2f}",
         f"refresh_token_rotated={token_result.get('refresh_token_rotated', False)}",
         f"imap_auth_ms={timings.get('imap_auth_ms', 0.0):.2f}",
@@ -75,6 +78,7 @@ def _log_mail_cache_hit(operation: str, account: Account, folder: str, total_ms:
         f"folder={folder}",
         "cache_hit=True",
         "token_source=skipped",
+        "session_source=skipped",
         "token_ms=0.00",
         "imap_auth_ms=0.00",
         "select_ms=0.00",
@@ -116,17 +120,32 @@ def _get_mail_result_with_retry(
                 "fetch_ms": 0.0,
             },
         }
-        _log_mail_operation(operation, account, folder, token_result, failed_result, total_ms, page=page, page_size=page_size)
+        _log_mail_operation(
+            operation,
+            account,
+            folder,
+            token_result,
+            failed_result,
+            total_ms,
+            page=page,
+            page_size=page_size,
+            session_source="skipped",
+        )
         return failed_result
 
-    mail_result = fetch_func(token_result["access_token"])
+    with acquire_imap_session(account.id, account.email, token_result["access_token"]) as session_ctx:
+        mail_result = fetch_func(session_ctx)
+        session_source = session_ctx["session_source"]
     retry = False
-    if not mail_result.get("success") and mail_result.get("auth_failed"):
+    if not mail_result.get("success") and (mail_result.get("auth_failed") or mail_result.get("session_broken")):
         retry = True
+        release_broken_session(account.id)
         retry_token_result = get_access_token_for_account(db, account, force_refresh=True)
         if retry_token_result.get("success"):
             token_result = retry_token_result
-            mail_result = fetch_func(token_result["access_token"])
+            with acquire_imap_session(account.id, account.email, token_result["access_token"]) as session_ctx:
+                mail_result = fetch_func(session_ctx)
+                session_source = session_ctx["session_source"]
         else:
             token_result = retry_token_result
             mail_result = {
@@ -134,9 +153,21 @@ def _get_mail_result_with_retry(
                 "error_msg": retry_token_result.get("error_msg", "刷新 access_token 失败"),
                 "timings": mail_result.get("timings", {}),
             }
+            session_source = "recreated"
 
     total_ms = (time.perf_counter() - started_at) * 1000
-    _log_mail_operation(operation, account, folder, token_result, mail_result, total_ms, page=page, page_size=page_size, retry=retry)
+    _log_mail_operation(
+        operation,
+        account,
+        folder,
+        token_result,
+        mail_result,
+        total_ms,
+        page=page,
+        page_size=page_size,
+        retry=retry,
+        session_source=session_source,
+    )
     return mail_result
 
 
@@ -159,12 +190,14 @@ def list_mails(db: Session, account_id: int, folder: str, page: int, page_size: 
     mail_result = _get_mail_result_with_retry(
         db,
         account,
-        lambda access_token: get_emails_by_folder_paginated(
+        lambda session_ctx: get_emails_by_folder_paginated(
+            imap_conn=session_ctx["entry"].imap_conn,
+            session_entry=session_ctx["entry"],
             email_address=account.email,
-            access_token=access_token,
             target_folder=target_folder,
             page_number=page_number,
             emails_per_page=page_size,
+            imap_auth_ms=session_ctx["imap_auth_ms"],
         ),
         "list",
         normalized_folder,
@@ -203,11 +236,13 @@ def get_mail_detail(db: Session, account_id: int, folder: str, message_id: str) 
     detail_result = _get_mail_result_with_retry(
         db,
         account,
-        lambda access_token: get_email_detail_by_uid(
+        lambda session_ctx: get_email_detail_by_uid(
+            imap_conn=session_ctx["entry"].imap_conn,
+            session_entry=session_ctx["entry"],
             email_address=account.email,
-            access_token=access_token,
             target_uid=message_id,
             target_folder=target_folder,
+            imap_auth_ms=session_ctx["imap_auth_ms"],
         ),
         "detail",
         normalized_folder,
