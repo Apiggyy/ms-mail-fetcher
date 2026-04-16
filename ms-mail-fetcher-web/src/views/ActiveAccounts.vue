@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, Refresh } from '@element-plus/icons-vue'
+import { copyText } from '@/utils/clipboard'
 import {
     archiveAccount,
     archiveAllAccounts,
@@ -60,13 +61,14 @@ function emitAccountsChanged() {
     }
 }
 
-const handleCopy = (text) => {
+const handleCopy = async (text) => {
     if (!text) return
-    navigator.clipboard.writeText(text).then(() => {
+    try {
+        await copyText(text)
         ElMessage.success('已复制')
-    }).catch(() => {
+    } catch {
         ElMessage.error('复制失败')
-    })
+    }
 }
 
 const pageCount = computed(() => Math.max(Math.ceil(total.value / pageSize.value), 1))
